@@ -172,7 +172,11 @@ app.get("/convert-pdf/:id", async (req, res) => {
 
 // Serve converted images statically
 app.use("/output", express.static(path.join(__dirname, "output")));
-
+// ✅ Démarrer le serveur ici, après l'initialisation
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
 (async () => {
   try {
     const pageUrl =
@@ -181,12 +185,6 @@ app.use("/output", express.static(path.join(__dirname, "output")));
     console.log("hello world");
     const data = await scrapePage(pageUrl);
     console.log(data);
-
-    // ✅ Démarrer le serveur ici, après l'initialisation
-    const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
   } catch (error) {
     console.error("Erreur au démarrage :", error.message);
     process.exit(1);
