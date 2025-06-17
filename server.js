@@ -174,23 +174,21 @@ app.get("/convert-pdf/:id", async (req, res) => {
 app.use("/output", express.static(path.join(__dirname, "output")));
 
 (async () => {
-  // const data = await scrapePage(pageUrl);
-  // console.log(
-  //   "Filtered Data (Constitution & Augmentation de capital):",
-  //   JSON.stringify(data, null, 2)
-  // );
+  try {
+    const pageUrl =
+      "https://www.ejustice.just.fgov.be/cgi_tsv/list.pl?language=fr&btw=0782372801";
 
-  // Extract text from the PDFs
-  const pageUrl =
-    "https://www.ejustice.just.fgov.be/cgi_tsv/list.pl?language=fr&btw=0782372801";
+    console.log("hello world");
+    const data = await scrapePage(pageUrl);
+    console.log(data);
 
-  console.log("hello world");
-  const data = await scrapePage(pageUrl);
-  console.log(data);
+    // ✅ Démarrer le serveur ici, après l'initialisation
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error("Erreur au démarrage :", error.message);
+    process.exit(1);
+  }
 })();
-
-// Start the server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
