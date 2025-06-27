@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/abjabja/QuickStart-MERN-back-end#readme",
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.72",
     "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "cheerio": "^1.0.0",
@@ -41,7 +42,11 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "pdf-poppler": "^0.2.1",
-    "puppeteer": "^24.2.0",
+    "pdf-to-image-generator": "^1.0.5",
+    "pdf-to-img": "^4.5.0",
+    "pdf2pic": "^3.2.0",
+    "pdfjs-dist": "^3.11.174",
+    "puppeteer": "^21.3.8",
     "tesseract.js": "^5.1.1",
     "validator": "^13.7.0"
   },
