@@ -1,61 +1,159 @@
-import fetch from "node-fetch";
-import { JSDOM } from "jsdom";
-
-/**
- * Function to scrape the page and extract relevant metadata
- * @param {string} pageUrl - URL of the webpage to scrape
- * @returns {Array} - Filtered array of objects containing only Constitution and Augmentation de capital
- */
+import puppeteer from 'puppeteer';
 
 async function scrapePage(pageUrl) {
+  let browser;
   try {
-    // Fetch the webpage content
-    const response = await fetch(pageUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch page: ${response.statusText}`);
-    }
-    const htmlContent = await response.text();
-
-    // Parse the HTML using JSDOM
-    const dom = new JSDOM(htmlContent);
-    const document = dom.window.document;
-
-    // Select all list items
-    const items = document.querySelectorAll(".list-item");
-    const extractedData = [];
-
-    items.forEach((item) => {
-      const titleElement = item.querySelector(".list-item--title");
-      const pdfElement = item.querySelector("a.standard");
-      const dateText =
-        titleElement?.textContent.match(/\d{4}-\d{2}-\d{2}/)?.[0];
-
-      // Extract title, date, and PDF URL
-      const title = titleElement?.textContent.trim().replace(/\s+/g, " ");
-      const pdfUrl = pdfElement
-        ? new URL(pdfElement.getAttribute("href"), pageUrl).href
-        : null;
-      const date = dateText || null;
-
-      if (title && pdfUrl && date) {
-        extractedData.push({
-          title,
-          date,
-          pdfUrl,
-        });
-      }
+    console.log("Launching browser...");
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
-
-    // Filter for items containing "Constitution" or "Augmentation de capital" in the title
-    const filteredData = extractedData.filter((item) =>
-      /Constitution|Augmentation de capital|CAPITAL|ACTIONS| DEMISSIONS et\/ou NOMINATIONS/i.test(
-        item.title
-      )
+    
+    const page = await browser.newPage();
+    
+    // Disable cache to ensure fresh requests
+    await page.setCacheEnabled(false);
+    
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    console.log("Navigating to page:", pageUrl);
+    await page.goto(pageUrl, { 
+      waitUntil: 'networkidle0',
+      timeout: 30000 
+    });
+    
+    console.log("Waiting for list content...");
+    await page.waitForSelector('.list', { timeout: 10000 });
+    
+    console.log("List found, extracting data...");
+    
+    // Get basic info for filtering
+    const articles = await page.evaluate(() => {
+      const items = document.querySelectorAll('.list-item');
+      const results = [];
+      
+      items.forEach((item, index) => {
+        const content = item.querySelector('.list-item--content');
+        if (!content) return;
+        
+        const titleLink = content.querySelector('a[href*="article"]');
+        const title = titleLink?.textContent?.trim().replace(/\s+/g, ' ');
+        const articleUrl = titleLink?.href;
+        
+        const textContent = content.textContent;
+        const dateMatch = textContent.match(/(\d{4})-(\d{2})-(\d{2})/);
+        const date = dateMatch ? dateMatch[0] : null;
+        
+        if (title && date && articleUrl) {
+          results.push({
+            title,
+            date,
+            articleUrl,
+            index
+          });
+        }
+      });
+      
+      return results;
+    });
+    
+    console.log(`Found ${articles.length} articles`);
+    
+    // Filter for relevant documents
+    const filteredArticles = articles.filter((item) =>
+      /Constitution|Augmentation de capital|CAPITAL|ACTIONS|DEMISSIONS|NOMINATIONS/i.test(item.title)
     );
-
-    return filteredData;
+    
+    console.log(`Filtered to ${filteredArticles.length} relevant articles`);
+    
+    // Track unique PDFs to avoid duplicates
+    const uniquePdfUrls = new Set();
+    const pdfData = [];
+    
+    for (const article of filteredArticles) {
+      try {
+        console.log(`\nProcessing article ${article.index + 1}: ${article.title.substring(0, 60)}...`);
+        console.log(`  Article URL: ${article.articleUrl}`);
+        
+        // Create a new page for each article to avoid state pollution
+        const articlePage = await browser.newPage();
+        await articlePage.setCacheEnabled(false);
+        await articlePage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+        
+        let pdfUrl = null;
+        
+        // Set up PDF detection
+        articlePage.on('response', async (response) => {
+          const url = response.url();
+          const contentType = response.headers()['content-type'] || '';
+          
+          if (url.includes('.pdf') || contentType.includes('pdf')) {
+            pdfUrl = url;
+            console.log(`  Detected PDF in response: ${url}`);
+          }
+        });
+        
+        // Navigate to the article page
+        await articlePage.goto(article.articleUrl, { 
+          waitUntil: 'networkidle0',
+          timeout: 20000 
+        });
+        
+        // Wait a bit for any async PDF loading
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // If PDF not detected in responses, look in the page content
+        if (!pdfUrl) {
+          pdfUrl = await articlePage.evaluate(() => {
+            // Look for iframe with PDF
+            const iframe = document.querySelector('iframe[src*=".pdf"]');
+            if (iframe) return iframe.src;
+            
+            // Look for direct PDF link
+            const pdfLink = document.querySelector('a[href*=".pdf"]');
+            if (pdfLink) return pdfLink.href;
+            
+            // Check if current URL is a PDF
+            if (window.location.href.includes('.pdf')) {
+              return window.location.href;
+            }
+            
+            return null;
+          });
+        }
+        
+        await articlePage.close();
+        
+        // Check if this PDF URL is unique
+        if (pdfUrl && !uniquePdfUrls.has(pdfUrl)) {
+          console.log(`  ✓ Got unique PDF: ${pdfUrl}`);
+          uniquePdfUrls.add(pdfUrl);
+          pdfData.push({
+            title: article.title,
+            date: article.date,
+            pdfUrl
+          });
+        } else if (pdfUrl) {
+          console.log(`  ⊘ Skipping duplicate PDF: ${pdfUrl}`);
+        } else {
+          console.log(`  ✗ No PDF found for this article`);
+        }
+        
+      } catch (error) {
+        console.error(`Error processing article ${article.index}:`, error.message);
+      }
+    }
+    
+    console.log(`\nSuccessfully extracted ${pdfData.length} unique PDF URLs (skipped ${filteredArticles.length - pdfData.length} duplicates)\n`);
+    
+    await browser.close();
+    return pdfData;
+    
   } catch (error) {
     console.error("Error scraping page:", error.message);
+    if (browser) {
+      await browser.close();
+    }
     return [];
   }
 }
