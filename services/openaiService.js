@@ -62,7 +62,7 @@ export const analyzeImage = async (
 export const analyzeText = async (longText) => {
   try {
     const prompt = `
-You are an expert assistant analyzing company shareholder documents.
+You are an expert assistant analyzing company shareholder documents from Belgian official publications (Moniteur Belge).
 
 From the provided text, extract and return ONLY the following strictly in valid JSON format:
 
@@ -70,18 +70,27 @@ From the provided text, extract and return ONLY the following strictly in valid 
   "shareholders": [
     {
       "full_name": "Full Name Here",
-      "shares": NumberOfShares
+      "shares": NumberOfShares,
+      "capital_amount": AmountInEuros
     }
   ],
-  "total_shares": TotalNumberOfShares
+  "total_shares": TotalNumberOfShares,
+  "total_capital": TotalCapitalAmountInEuros,
+  "capital_per_share": CapitalPerShareInEuros
 }
 
 Instructions:
-- There may be one or more shareholders.
-- Each shareholder must have a full name and a number of shares.
-- total_shares must equal the sum of all shares.
-- Do NOT include any explanation, text, or formatting outside the JSON.
-- Do NOT wrap the output in \`\`\` or Markdown.
+- Extract ALL shareholders with their names and number of shares
+- For each shareholder, calculate their capital amount based on their shares
+- total_shares must equal the sum of all individual shares
+- total_capital is the total company capital amount in euros (look for "capital" or "capital social")
+- capital_per_share = total_capital / total_shares (calculate this value)
+- Each shareholder's capital_amount = their shares × capital_per_share
+- If the document mentions capital directly, use that value
+- All monetary amounts should be numbers (no currency symbols)
+- Do NOT include any explanation, text, or formatting outside the JSON
+- Do NOT wrap the output in \`\`\` or Markdown
+- Return ONLY valid JSON
 
 Here is the text to analyze:
 ---
