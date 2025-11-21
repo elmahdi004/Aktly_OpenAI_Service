@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: your-service-name
-    env: node
-    buildCommand: |
-      apt-get update && apt-get install -y chromium chromium-sandbox
-      npm install
-    startCommand: npm start
