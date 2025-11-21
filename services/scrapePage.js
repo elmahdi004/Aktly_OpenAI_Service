@@ -4,14 +4,16 @@ async function scrapePage(pageUrl) {
   let browser;
   try {
     console.log("Launching browser...");
-    browser = await puppeteer.launch({
-      headless: true,
-   args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-  ]
+   browser = await puppeteer.launch({
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+      ]
     });
     
     const page = await browser.newPage();
