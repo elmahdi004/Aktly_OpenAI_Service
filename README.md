@@ -2,6 +2,25 @@
 #2 - npm install
 #3 - npm start
 
+## Deployment (Render + Puppeteer)
+
+Puppeteer (v24+) does not auto-download a browser unless explicitly installed. This project installs Chrome during `npm install` via the `postinstall` script.
+
+Required steps on Render:
+- Ensure build command triggers `npm install` (not `npm ci --omit=dev` unless dev deps irrelevant).
+- Set environment variable `PUPPETEER_CACHE_DIR=/opt/render/.cache/puppeteer` (or leave unset; code defaults there).
+- Do NOT set `PUPPETEER_SKIP_DOWNLOAD` (would prevent Chrome download).
+
+Optional environment variables:
+- `PUPPETEER_EXECUTABLE_PATH` : Force a specific Chrome binary path if needed.
+
+Troubleshooting:
+- Error "Could not find Chrome" usually means postinstall did not run or cache dir mismatch.
+- Check logs for `Using Puppeteer managed Chrome:` message; if absent, verify that `npx puppeteer browsers install chrome@stable` ran.
+- If still failing, add a temporary build script: `npm run postinstall && npm start` and redeploy.
+
+Runtime flags used (`--no-sandbox` etc.) are required in many container environments. Remove cautiously.
+
 How It Works:
 
 1- Définition des variables : L’URL de la page à scraper et le dossier de sortie sont définis.

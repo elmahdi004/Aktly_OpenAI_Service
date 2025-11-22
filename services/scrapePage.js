@@ -1,5 +1,6 @@
 import puppeteer from "puppeteer";
 import * as fs from "fs";
+import { execSync } from 'child_process';
 
 function resolveExecutablePath() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
@@ -40,26 +41,71 @@ async function scrapePage(pageUrl) {
   let browser;
   try {
     console.log("Launching browser...");
-    const executablePath = resolveExecutablePath();
+    let executablePath = resolveExecutablePath();
     if (executablePath) {
-      console.log(`Using browser executable: ${executablePath}`);
+      console.log(`Using system browser executable: ${executablePath}`);
     } else {
-      console.log(
-        "No system Chrome/Edge found. Falling back to bundled Chromium."
-      );
+      // Try Puppeteer's managed browser path
+      try {
+        const managedPath = puppeteer.executablePath();
+        if (managedPath && fs.existsSync(managedPath)) {
+          executablePath = managedPath;
+          console.log(`Using Puppeteer managed Chrome: ${managedPath}`);
+        } else {
+          console.log('Managed Chrome path not found, will rely on Puppeteer defaults.');
+        }
+      } catch (e) {
+        console.log('Could not resolve Puppeteer managed executable path:', e.message);
+      }
     }
-    browser = await puppeteer.launch({
-      headless: "new",
+    if (!executablePath) {
+      console.log('No system or managed Chrome found. If this fails, ensure postinstall ran and cache directory is correct.');
+    }
+    const launchOptions = {
+      headless: 'new',
       ...(executablePath ? { executablePath } : {}),
       args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-software-rasterizer",
-        "--disable-extensions",
-      ],
-    });
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions'
+      ]
+    };
+
+    const attemptLaunch = () => puppeteer.launch(launchOptions);
+
+    try {
+      browser = await attemptLaunch();
+    } catch (launchErr) {
+      const msg = launchErr?.message || '';
+      if (/Could not find Chrome/i.test(msg)) {
+        console.log('Chrome not found. Attempting on-the-fly installation...');
+        try {
+          const cacheDir = process.env.PUPPETEER_CACHE_DIR || '/opt/render/.cache/puppeteer';
+          // Ensure cache directory exists
+          try { fs.mkdirSync(cacheDir, { recursive: true }); } catch (_) {}
+          // Install stable Chrome
+          execSync('npx puppeteer browsers install chrome@stable', { stdio: 'inherit' });
+          console.log('Chrome installation completed. Retrying launch...');
+          // Recompute managed path after install
+          try {
+            const managedPath = puppeteer.executablePath();
+            if (managedPath && fs.existsSync(managedPath)) {
+              launchOptions.executablePath = managedPath;
+              console.log(`Using newly installed Chrome at: ${managedPath}`);
+            }
+          } catch (_) {}
+          browser = await attemptLaunch();
+        } catch (installErr) {
+          console.error('Failed to install Chrome at runtime:', installErr.message);
+          throw launchErr; // original error
+        }
+      } else {
+        throw launchErr;
+      }
+    }
 
     const page = await browser.newPage();
 
