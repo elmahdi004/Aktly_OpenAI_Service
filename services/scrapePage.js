@@ -1,19 +1,61 @@
 import puppeteer from 'puppeteer';
+import * as fs from 'fs';
+
+function resolveExecutablePath() {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  const candidates = [];
+  const platform = process.platform;
+  if (platform === 'win32') {
+    candidates.push(
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+      'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
+    );
+  } else if (platform === 'darwin') {
+    candidates.push(
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
+    );
+  } else {
+    candidates.push(
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium'
+    );
+  }
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    } catch (_) {}
+  }
+  return undefined; // Let Puppeteer use its downloaded Chromium
+}
 
 async function scrapePage(pageUrl) {
   let browser;
   try {
     console.log("Launching browser...");
-   browser = await puppeteer.launch({
+    const executablePath = resolveExecutablePath();
+    if (executablePath) {
+      console.log(`Using browser executable: ${executablePath}`);
+    } else {
+      console.log('No system Chrome/Edge found. Falling back to bundled Chromium.');
+    }
+    browser = await puppeteer.launch({
       headless: 'new',
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+      ...(executablePath ? { executablePath } : {}),
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
         '--disable-software-rasterizer',
-        '--disable-extensions',
+        '--disable-extensions'
       ]
     });
     
